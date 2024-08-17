@@ -1,0 +1,19 @@
+[Unit]
+Description=LND Floating IP
+After=lnd.service
+Wants=lnd.service
+
+[Service]
+ExecStart=/usr/local/bin/lnd-floating-ip.sh
+
+Restart=always
+
+Type=exec
+
+ProtectSystem=full
+NoNewPrivileges=true
+PrivateDevices=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

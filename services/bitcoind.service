@@ -1,0 +1,47 @@
+[Unit]
+Description=Bitcoin daemon
+
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Environment='MALLOC_ARENA_MAX=1'
+ExecStart=/usr/bin/bitcoind -pid=/run/bitcoind/bitcoind.pid \
+                            -conf=/etc/bitcoin/bitcoin.conf \
+                            -datadir=/var/lib/bitcoind \
+                            -startupnotify='systemd-notify --ready' \
+                            -shutdownnotify='systemd-notify --stopping'
+
+Type=notify
+NotifyAccess=all
+PIDFile=/run/bitcoind/bitcoind.pid
+
+Restart=on-failure
+TimeoutStartSec=infinity
+TimeoutStopSec=600
+
+User=bitcoin
+Group=bitcoin
+
+# /run/bitcoind
+RuntimeDirectory=bitcoind
+RuntimeDirectoryMode=0710
+
+# /etc/bitcoin
+ConfigurationDirectory=bitcoin
+ConfigurationDirectoryMode=0710
+
+# /var/lib/bitcoind
+StateDirectory=bitcoind
+StateDirectoryMode=0710
+
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+PrivateDevices=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
