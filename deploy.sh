@@ -101,7 +101,7 @@ EOF
 )$BYTE31_OCT$(tail -c97 <<EOF
 $SHA512_OCT
 EOF
-) | sed -r 's/(...)/\\\1/g') | base64 -w0)
+) | sed -E 's/(...)/\\\1/g') | base64 -w0)
 printf "\033[1;32mDone generating hidden service private key\033[0m\n"
 
 for i in `seq 1 3`; do
