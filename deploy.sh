@@ -119,7 +119,7 @@ for i in `seq 1 3`; do
     $SSH_CMD rm -r /var/lib/etcd/default
     $SSH_CMD sed -i "'/\[Service\]/a RestartMode=direct'" /usr/lib/systemd/system/etcd.service
     $SSH_CMD mkdir /etc/etcd
-    scp certs/ca.crt certs/etcd$i.crt certs/etcd$i.key "root@$IP:/etc/etcd/"
+    scp certs/ca.crt certs/etcd$i.crt certs/etcd$i.key certs/client.crt certs/client.key "root@$IP:/etc/etcd/"
     $SSH_CMD chown etcd:etcd "/etc/etcd/*"
     $SSH_CMD chmod 440 "/etc/etcd/*"
     echo "ETCD_NAME=etcd$i
@@ -143,9 +143,7 @@ SOCKSPort 9050
 ControlPort 9051
 CookieAuthentication 1" | $SSH_CMD "cat > /etc/tor/torrc"
     $SSH_CMD /sbin/usermod -a -G debian-tor bitcoin
-    scp certs/client.crt certs/client.key "root@$IP:/home/bitcoin/"
-    $SSH_CMD chown bitcoin:bitcoin /home/bitcoin/client.crt /home/bitcoin/client.key
-    $SSH_CMD chmod 440 /home/bitcoin/client.crt /home/bitcoin/client.key
+    $SSH_CMD /sbin/usermod -a -G etcd bitcoin
     $SSH_CMD mkdir /home/bitcoin/.lnd
     echo "[Application Options]
 listen=0.0.0.0:9735
@@ -179,8 +177,8 @@ db.backend=etcd
 
 [etcd]
 db.etcd.host=127.0.0.1:2379
-db.etcd.cert_file=/home/bitcoin/client.crt
-db.etcd.key_file=/home/bitcoin/client.key
+db.etcd.cert_file=/etc/etcd/client.crt
+db.etcd.key_file=/etc/etcd/client.key
 db.etcd.insecure_skip_verify=1
 
 [cluster]

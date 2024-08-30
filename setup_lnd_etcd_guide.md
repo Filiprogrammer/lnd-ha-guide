@@ -237,7 +237,7 @@ Create a directory at /etc/etcd on all three instances.
 root@lndetcdx:~$ mkdir /etc/etcd
 ```
 
-Copy ca.crt, etcd1.crt and etcd1.key from the local system into /etc/etcd on "lndetcd1", "lndetcd2" and "lndetcd3".
+Copy ca.crt, etcd1.crt, etcd1.key, client.crt and client.key from the local system into /etc/etcd on "lndetcd1", "lndetcd2" and "lndetcd3".
 
 Restrict the access rights of the certificates and keys to only the etcd user and group.
 
@@ -246,13 +246,10 @@ root@lndetcdx:~$ chown etcd:etcd /etc/etcd/*
 root@lndetcdx:~$ chmod 440 /etc/etcd/*
 ```
 
-Copy client.crt and client.key from the local system into /home/bitcoin on "lndetcd1", "lndetcd2" and "lndetcd3".
-
-Restrict the access rights of the certificates and keys to only the bitcoin user and group.
+Add the bitcoin user to the etcd group, to allow lnd to access the etcd client certificate and key.
 
 ```console
-root@lndetcdx:~$ chown bitcoin:bitcoin /home/bitcoin/client.crt /home/bitcoin/client.key
-root@lndetcdx:~$ chmod 440 /home/bitcoin/client.crt /home/bitcoin/client.key
+root@lndetcdx:~$ /sbin/usermod -a -G etcd bitcoin
 ```
 
 Put the following contents into the /etc/default/etcd file:
@@ -288,8 +285,8 @@ Then list the members of the cluster on any of the instances and make sure that 
 
 ```console
 root@lndetcdx:~$ export ETCDCTL_CACERT=/etc/etcd/ca.crt
-root@lndetcdx:~$ export ETCDCTL_CERT=/home/bitcoin/client.crt
-root@lndetcdx:~$ export ETCDCTL_KEY=/home/bitcoin/client.key
+root@lndetcdx:~$ export ETCDCTL_CERT=/etc/etcd/client.crt
+root@lndetcdx:~$ export ETCDCTL_KEY=/etc/etcd/client.key
 root@lndetcdx:~$ etcdctl member list --write-out=table
 ```
 
@@ -378,8 +375,8 @@ db.backend=etcd
 
 [etcd]
 db.etcd.host=127.0.0.1:2379
-db.etcd.cert_file=/home/bitcoin/client.crt
-db.etcd.key_file=/home/bitcoin/client.key
+db.etcd.cert_file=/etc/etcd/client.crt
+db.etcd.key_file=/etc/etcd/client.key
 db.etcd.insecure_skip_verify=1
 
 [cluster]
