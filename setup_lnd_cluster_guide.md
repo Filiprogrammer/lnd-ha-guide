@@ -145,7 +145,7 @@ root@bitcoind:~$ bitcoin-cli getbalance
 
 # Step 2: Setup an lnd cluster
 
-## Step 2.1: Generate TLS certificates for etcd
+## Step 2.1: Generate TLS certificates
 
 Install openssl on a local system if not already installed.
 
@@ -179,12 +179,35 @@ user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyo
 user@local:~$ openssl req -x509 -in client.csr -CA ca.crt -CAkey ca.key -out client.crt -days 3650 -copy_extensions copy
 ```
 
+If a PostgreSQL database is planned, also generate TLS certificates for Patroni.
+
+Perform the following steps for each Patroni instance:
+
+```console
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroni1.key -out patroni1.csr -noenc -subj "/CN=patroni1" -addext "subjectAltName=IP:${IP_OF_LNDETCDPG1},IP:127.0.0.1"
+
+user@local:~$ openssl req -x509 -in patroni1.csr -CA ca.crt -CAkey ca.key -out patroni1.crt -days 3650 -copy_extensions copy
+```
+
+Also generate a client certificate for Patroni.
+
+```console
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroniclient.key -out patroniclient.csr -noenc -subj "/CN=patroniclient"
+
+user@local:~$ openssl req -x509 -in patroniclient.csr -CA ca.crt -CAkey ca.key -out patroniclient.crt -days 3650 -copy_extensions copy
+```
+
 ## Step 2.2: Setup an etcd cluster
 
 Setup three Debian instances with ECC memory called "lndetcd1", "lndetcd2" and "lndetcd3" with the following ports allowed in the firewall on each of them:
 - 2379 (etcd client communication)
 - 2380 (etcd peer communication)
 - 9735 (Lightning)
+
+If a PostgreSQL database is planned, also allow the following ports:
+
+- 5432 (PostgreSQL)
+- 8008 (Patroni REST API)
 
 Create a system user called "bitcoin" with a home directory and set a password on each instance.
 
@@ -313,7 +336,173 @@ Enable the etcd.service on each instance so it automatically starts up when the 
 root@lndetcdx:~$ systemctl enable etcd.service
 ```
 
-## Step 2.3: Setup tor
+## Step 2.3: Setup PostgreSQL + Patroni
+
+Skip this step if a PostgreSQL database is not planned.
+
+Start by installing PostgreSQL and Patroni on all three instances.
+
+```console
+root@lndetcdpgx:~$ apt install postgresql patroni
+```
+
+Stop the postgresql.service and the patroni.service which might have been started automatically during installation, and delete the PostgreSQL data directory on each instance to start fresh.
+
+```console
+root@lndetcdpgx:~$ systemctl stop postgresql.service
+root@lndetcdpgx:~$ systemctl stop 'postgresql@*.service'
+root@lndetcdpgx:~$ systemctl stop patroni.service
+root@lndetcdpgx:~$ rm -r /var/lib/postgresql/15/main
+```
+
+Since PostgreSQL is not intended to be started by systemd, but will instead be started by Patroni, disable and mask the postgresql.service so that it cannot be started directly by systemd.
+
+```console
+root@lndetcdpgx:~$ systemctl disable postgresql.service
+root@lndetcdpgx:~$ systemctl disable postgresql@.service
+root@lndetcdpgx:~$ systemctl mask postgresql.service
+root@lndetcdpgx:~$ systemctl mask postgresql@.service
+```
+
+Copy patroni1.crt, patroni1.key, patroniclient.crt and patroniclient.key from the local system into /etc/patroni on "lndetcdpg1", "lndetcdpg2" and "lndetcdpg3". Rename patroniclient.crt and patroniclient.key to client.crt and client.key.
+
+Restrict access to the certificates and keys to the postgres user and group only.
+
+```console
+root@lndetcdpgx:~$ chown postgres:postgres /etc/patroni/patroni1.crt /etc/patroni/patroni1.key /etc/patroni/client.crt /etc/patroni/client.key
+root@lndetcdpgx:~$ chmod 400 /etc/patroni/patroni1.crt /etc/patroni/patroni1.key /etc/patroni/client.crt /etc/patroni/client.key
+```
+
+Put the following contents into the /etc/patroni/config.yml file:
+
+```yaml
+name: postgres1
+scope: postgres
+
+etcd3:
+  protocol: https
+  hosts:
+  - ${LNDETCDPG1_IP}:2379
+  - ${LNDETCDPG2_IP}:2379
+  - ${LNDETCDPG3_IP}:2379
+  cacert: /etc/etcd/ca.crt
+  cert: /etc/etcd/client.crt
+  key: /etc/etcd/client.key
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: ${OWN_IP}:8008
+  certfile: /etc/patroni/patroni1.crt
+  keyfile: /etc/patroni/patroni1.key
+  cafile: /etc/etcd/ca.crt
+  verify_client: required
+
+ctl:
+  certfile: /etc/patroni/client.crt
+  keyfile: /etc/patroni/client.key
+
+bootstrap:
+  dcs:
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        wal_level: replica
+        synchronous_commit: remote_apply
+        max_wal_senders: 10
+        synchronous_standby_names: '*'
+        hot_standby: on
+      pg_hba:
+      - local   all             all                                           peer
+      - host    all             all             127.0.0.1/32                  md5
+      - host    all             all             ::1/128                       md5
+      - host    all             all             ${IP_NETWORK}/${NETWORK_BITS} md5
+      - local   replication     all                                           peer
+      - host    replication     all             127.0.0.1/32                  md5
+      - host    replication     all             ::1/128                       md5
+      - host    replication     all             ${IP_NETWORK}/${NETWORK_BITS} md5
+  post_init: /etc/patroni/post_init.sh
+
+postgresql:
+  authentication:
+    superuser:
+      username: postgres
+      password: POSTGRES_SUPERUSER_PASSWORD
+    replication:
+      username: replicator
+      password: POSTGRES_REPLICATION_PASSWORD
+    rewind:
+      username: rewinder
+      password: POSTGRES_REWIND_PASSWORD
+  listen: '*:5432'
+  connect_address: ${OWN_IP}:5432
+  data_dir: /var/lib/postgresql/15/main
+  bin_dir: /usr/lib/postgresql/15/bin
+  config_dir: /etc/postgresql/15/main
+  pgpass: /var/lib/postgresql/15-main.pgpass
+```
+
+Repeat that for "lndetcdpg2" and "lndetcdpg3" with name, $OWN_IP and the certificate files changed respectively.
+
+Restrict access to /etc/patroni/config.yml to the postgres user only.
+
+```console
+root@lndetcdpgx:~$ chown postgres:postgres /etc/patroni/config.yml
+root@lndetcdpgx:~$ chmod 400 /etc/patroni/config.yml
+```
+
+Put the following contents into the /etc/patroni/post_init.sh file:
+
+```sh
+#!/bin/sh
+
+createuser lnd
+psql <<EOF
+ALTER USER lnd WITH PASSWORD 'POSTGRES_LND_PASSWORD';
+EOF
+createdb -O lnd lnd
+```
+
+Make the file executable only by the postgres user.
+
+```console
+root@lndetcdpgx:~$ chown postgres:postgres /etc/patroni/post_init.sh
+root@lndetcdpgx:~$ chmod 500 /etc/patroni/post_init.sh
+```
+
+Finally, add the postgres user to the etcd group so that it can access the etcd client certificate and key.
+
+```console
+root@lndetcdpgx:~$ /sbin/usermod -a -G etcd postgres
+```
+
+Then start Patroni on each instance.
+
+```console
+root@lndetcdpgx:~$ systemctl start patroni.service
+```
+
+List the members of the Patroni cluster and make sure that all three members are listed. There should be exactly one "Leader", one "Sync Standby", and one "Replica". The result should look something like this:
+
+```console
+root@lndetcdpgx:~$ patronictl -c /etc/patroni/config.yml list
++ Cluster: postgres ----------+--------------+---------+----+-----------+
+| Member    | Host            | Role         | State   | TL | Lag in MB |
++-----------+-----------------+--------------+---------+----+-----------+
+| postgres1 | 192.168.122.101 | Sync Standby | running |  1 |         0 |
+| postgres2 | 192.168.122.102 | Leader       | running |  1 |           |
+| postgres3 | 192.168.122.103 | Replica      | running |  1 |         0 |
++-----------+-----------------+--------------+---------+----+-----------+
+```
+
+Enable the patroni.service on each instance so that it starts automatically when the instance is started.
+
+```console
+root@lndetcdpgx:~$ systemctl enable patroni.service
+```
+
+## Step 2.4: Setup tor
 
 Install tor on each instance.
 
@@ -342,7 +531,7 @@ Add the bitcoin user to the debian-tor group on each instance.
 root@lndetcdx:~$ /sbin/usermod -a -G debian-tor bitcoin
 ```
 
-## Step 2.4: Setup lnd
+## Step 2.5: Setup lnd
 
 Place the lnd and lncli binaries into /usr/bin/ on each instance and make the binaries executable. Make sure that lnd is at least on version v0.18.3-beta or that it at least has the following patch applied: https://github.com/lightningnetwork/lnd/pull/8938 Also make sure that lnd was compiled with the "kvdb_etcd" build tag.
 
@@ -392,6 +581,15 @@ cluster.id=lndetcd1
 cluster.leader-session-ttl=100
 ```
 
+If a PostgreSQL setup is planned, put the following in the `[db]` section instead:
+
+```ini
+db.backend=postgres
+db.postgres.dsn=postgresql://lnd:POSTGRES_LND_PASSWORD@127.0.0.1:5432/lnd
+db.postgres.timeout=0
+db.use-native-sql=true
+```
+
 Make sure that the bitcoin user and bitcoin group own the /home/bitcoin/.lnd directory on each instance.
 
 ```console
@@ -431,13 +629,20 @@ MemoryDenyWriteExecute=true
 WantedBy=multi-user.target
 ```
 
+If a PostgreSQL setup is planned, add the following to the `[Unit]` section:
+
+```ini
+After=patroni.service
+BindsTo=patroni.service
+```
+
 Update the running systemd configuration on each instance.
 
 ```console
 root@lndetcdx:~$ systemctl daemon-reload
 ```
 
-Start lnd on only one instance.
+Start LND on only one instance. If a PostgreSQL setup is planned, the choice of the instance cannot be arbitrary. LND has to be started on the instance of the PostgreSQL primary. The primary can be found with `patronictl -c /etc/patroni/config.yml list`.
 
 ```console
 root@lndetcdx:~$ systemctl start lnd.service
@@ -485,7 +690,7 @@ Enable the service on each instance, to make sure that lnd is started automatica
 root@lndetcdx:~$ systemctl enable lnd.service
 ```
 
-## Step 2.5: Setup a floating IP address
+## Step 2.6: Setup a floating IP address
 
 To make the active leader always accessible via the same IP address, use a floating IP address that is always assigned to the currently active leader.
 

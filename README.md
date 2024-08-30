@@ -30,7 +30,7 @@ Move the resulting binaries (`bitcoind`, `bitcoin-cli`, `lnd`, `lncli`) to the `
 
 ## Deploying
 
-Either go the manual route and set everything up according to this [manual](setup_lnd_etcd_guide.md), or automate the process by using the `deploy.sh` script.
+Either go the manual route and set everything up according to this [manual](setup_lnd_cluster_guide.md), or automate the process by using the `deploy_with_etcddb.sh` script.
 
 To get started, set up a Debian instance called "bitcoind" to act as a Bitcoin full node. Configure the firewall to allow incoming connections on the following ports:
 
@@ -70,7 +70,7 @@ Then run the deploy script with the following arguments:
 - lndwalletpass - Password used to encrypt the LND wallet
 
 ```console
-./deploy.sh <bitcoind_ip> <lndetcd1_ip> <lndetcd2_ip> <lndetcd3_ip> <floating_ip> <mainnet|testnet|signet|regtest> <bitcoindrpcuser> <bitcoindrpcpass> <lndwalletpass>
+./deploy_with_etcddb.sh <bitcoind_ip> <lndetcd1_ip> <lndetcd2_ip> <lndetcd3_ip> <floating_ip> <mainnet|testnet|signet|regtest> <bitcoindrpcuser> <bitcoindrpcpass> <lndwalletpass>
 ```
 
 The optional next step is to setup a watchtower in a different datacenter.

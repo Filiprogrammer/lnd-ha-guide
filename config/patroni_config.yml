@@ -1,0 +1,65 @@
+name: postgres{i}
+scope: postgres
+
+etcd3:
+  protocol: https
+  hosts:
+  - {LNDETCDPG1_IP}:2379
+  - {LNDETCDPG2_IP}:2379
+  - {LNDETCDPG3_IP}:2379
+  cacert: /etc/etcd/ca.crt
+  cert: /etc/etcd/client.crt
+  key: /etc/etcd/client.key
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: {IP}:8008
+  certfile: /etc/patroni/patroni{i}.crt
+  keyfile: /etc/patroni/patroni{i}.key
+  cafile: /etc/etcd/ca.crt
+  verify_client: required
+
+ctl:
+  certfile: /etc/patroni/client.crt
+  keyfile: /etc/patroni/client.key
+
+bootstrap:
+  dcs:
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        wal_level: replica
+        synchronous_commit: remote_apply
+        max_wal_senders: 10
+        synchronous_standby_names: '*'
+        hot_standby: on
+      pg_hba:
+      - local   all             all                                         peer
+      - host    all             all             127.0.0.1/32                md5
+      - host    all             all             ::1/128                     md5
+      - host    all             all             {IP_NETWORK}/{NETWORK_BITS} md5
+      - local   replication     all                                         peer
+      - host    replication     all             127.0.0.1/32                md5
+      - host    replication     all             ::1/128                     md5
+      - host    replication     all             {IP_NETWORK}/{NETWORK_BITS} md5
+  post_init: /etc/patroni/post_init.sh
+
+postgresql:
+  authentication:
+    superuser:
+      username: postgres
+      password: {POSTGRES_SUPERUSER_PASSWORD}
+    replication:
+      username: replicator
+      password: {POSTGRES_REPLICATION_PASSWORD}
+    rewind:
+      username: rewinder
+      password: {POSTGRES_REWIND_PASSWORD}
+  listen: '*:5432'
+  connect_address: {IP}:5432
+  data_dir: /var/lib/postgresql/15/main
+  bin_dir: /usr/lib/postgresql/15/bin
+  config_dir: /etc/postgresql/15/main
+  pgpass: /var/lib/postgresql/15-main.pgpass
