@@ -113,7 +113,7 @@ for i in `seq 1 3`; do
     $SSH_CMD useradd --system --create-home --shell /bin/bash bitcoin
     $SSH_CMD "echo \"deb http://deb.debian.org/debian bookworm-backports main\" >> /etc/apt/sources.list"
     $SSH_CMD apt update
-    $SSH_CMD apt install -y systemd/stable-backports etcd-server etcd-client tor arping
+    $SSH_CMD apt install --no-install-recommends -y systemd/stable-backports etcd-server etcd-client tor arping
     $SSH_CMD systemctl stop etcd.service
     $SSH_CMD systemctl stop tor.service
     $SSH_CMD rm -r /var/lib/etcd/default
