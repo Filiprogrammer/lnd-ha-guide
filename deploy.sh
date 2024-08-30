@@ -40,20 +40,10 @@ scp bin/bitcoind bin/bitcoin-cli "root@$BITCOIND_IP:/usr/bin/"
 $SSH_CMD chmod +x /usr/bin/bitcoind /usr/bin/bitcoin-cli
 $SSH_CMD useradd --system --no-create-home --home /nonexistent --shell /usr/sbin/nologin bitcoin
 $SSH_CMD mkdir /etc/bitcoin
-echo "$NETWORK=1
-
-[$NETWORK]
-server=1
-txindex=1
-disablewallet=0
-rpcuser=$BITCOIND_RPCUSER
-rpcpassword=$BITCOIND_RPCPASS
-rpcallowip=0.0.0.0/0
-rpcbind=0.0.0.0:8332
-zmqpubhashblock=tcp://0.0.0.0:29000
-zmqpubrawtx=tcp://0.0.0.0:29001
-zmqpubrawblock=tcp://0.0.0.0:29002
-listen=1" | $SSH_CMD "cat > /etc/bitcoin/bitcoin.conf"
+sed -e "s/{NETWORK}/$NETWORK/g" \
+    -e "s/{BITCOIND_RPCUSER}/$BITCOIND_RPCUSER/g" \
+    -e "s/{BITCOIND_RPCPASS}/$BITCOIND_RPCPASS/g" \
+    config/bitcoin.conf | $SSH_CMD "cat > /etc/bitcoin/bitcoin.conf"
 $SSH_CMD chmod 0710 /etc/bitcoin
 $SSH_CMD chmod 0640 /etc/bitcoin/bitcoin.conf
 $SSH_CMD chown -R bitcoin:bitcoin /etc/bitcoin
@@ -123,71 +113,22 @@ for i in `seq 1 3`; do
     $SSH_CMD chown etcd:etcd "/etc/etcd/*"
     $SSH_CMD chmod 400 /etc/etcd/etcd$i.key /etc/etcd/etcd$i.crt
     $SSH_CMD chmod 440 /etc/etcd/ca.crt /etc/etcd/client.crt /etc/etcd/client.key
-    echo "ETCD_NAME=etcd$i
-ETCD_INITIAL_CLUSTER="etcd1=https://$LNDETCD1_IP:2380,etcd2=https://$LNDETCD2_IP:2380,etcd3=https://$LNDETCD3_IP:2380"
-ETCD_ADVERTISE_CLIENT_URLS=https://$IP:2379
-ETCD_LISTEN_CLIENT_URLS=https://0.0.0.0:2379
-ETCD_LISTEN_PEER_URLS=https://0.0.0.0:2380
-ETCD_INITIAL_ADVERTISE_PEER_URLS=https://$IP:2380
-ETCD_MAX_TXN_OPS=16384
-
-ETCD_CERT_FILE=/etc/etcd/etcd$i.crt
-ETCD_KEY_FILE=/etc/etcd/etcd$i.key
-ETCD_TRUSTED_CA_FILE=/etc/etcd/ca.crt
-ETCD_PEER_CERT_FILE=/etc/etcd/etcd$i.crt
-ETCD_PEER_KEY_FILE=/etc/etcd/etcd$i.key
-ETCD_PEER_TRUSTED_CA_FILE=/etc/etcd/ca.crt
-ETCD_PEER_CLIENT_CERT_AUTH=true
-ETCD_CLIENT_CERT_AUTH=true" | $SSH_CMD "cat > /etc/default/etcd"
-    echo "ExitPolicy reject *:*
-SOCKSPort 9050
-ControlPort 9051
-CookieAuthentication 1" | $SSH_CMD "cat > /etc/tor/torrc"
+    sed -e "s/{i}/$i/g" \
+        -e "s/{LNDETCD1_IP}/$LNDETCD1_IP/g" \
+        -e "s/{LNDETCD2_IP}/$LNDETCD2_IP/g" \
+        -e "s/{LNDETCD3_IP}/$LNDETCD3_IP/g" \
+        -e "s/{IP}/$IP/g" \
+        config/etcd | $SSH_CMD "cat > /etc/default/etcd"
+    scp config/torrc "root@$IP:/etc/tor/torrc"
     $SSH_CMD /sbin/usermod -a -G debian-tor bitcoin
     $SSH_CMD /sbin/usermod -a -G etcd bitcoin
     $SSH_CMD mkdir /home/bitcoin/.lnd
-    echo "[Application Options]
-listen=0.0.0.0:9735
-alias=lndetcd
-wallet-unlock-password-file=/home/bitcoin/lnd_pwd
-
-[Bitcoin]
-bitcoin.$NETWORK=true
-bitcoin.node=bitcoind
-
-[Bitcoind]
-bitcoind.rpcuser=$BITCOIND_RPCUSER
-bitcoind.rpcpass=$BITCOIND_RPCPASS
-bitcoind.rpchost=$BITCOIND_IP:8332
-bitcoind.zmqpubrawtx=tcp://$BITCOIND_IP:29001
-bitcoind.zmqpubrawblock=tcp://$BITCOIND_IP:29002
-bitcoind.estimatemode=ECONOMICAL
-
-[tor]
-tor.active=true
-tor.v3=true
-
-[wtclient]
-wtclient.active=true
-
-[healthcheck]
-healthcheck.leader.interval=60s
-
-[db]
-db.backend=etcd
-
-[etcd]
-db.etcd.host=127.0.0.1:2379
-db.etcd.cert_file=/etc/etcd/client.crt
-db.etcd.key_file=/etc/etcd/client.key
-db.etcd.insecure_skip_verify=1
-
-[cluster]
-cluster.enable-leader-election=1
-cluster.leader-elector=etcd
-cluster.etcd-election-prefix=cluster-leader
-cluster.id=lndetcd$i
-cluster.leader-session-ttl=100" | $SSH_CMD "cat > /home/bitcoin/.lnd/lnd.conf"
+    sed -e "s/{i}/$i/g" \
+        -e "s/{NETWORK}/$NETWORK/g" \
+        -e "s/{BITCOIND_RPCUSER}/$BITCOIND_RPCUSER/g" \
+        -e "s/{BITCOIND_RPCPASS}/$BITCOIND_RPCPASS/g" \
+        -e "s/{BITCOIND_IP}/$BITCOIND_IP/g" \
+        config/lnd.conf_etcd | $SSH_CMD "cat > /home/bitcoin/.lnd/lnd.conf"
     echo -n "ED25519-V3:$TOR_PRIV_KEY_BASE64" | $SSH_CMD "cat > /home/bitcoin/.lnd/v3_onion_private_key"
     $SSH_CMD chmod 600 /home/bitcoin/.lnd/v3_onion_private_key
     $SSH_CMD chown -R bitcoin:bitcoin /home/bitcoin/.lnd
@@ -197,29 +138,10 @@ cluster.leader-session-ttl=100" | $SSH_CMD "cat > /home/bitcoin/.lnd/lnd.conf"
     $SSH_CMD chmod 660 /home/bitcoin/lnd_pwd
     NETWORK_INTERFACE="$($SSH_CMD ip route get 1.1.1.1 | sed -n 's/.* dev \([^\ ]*\) .*/\1/p')"
     SUBNET_MASK="$($SSH_CMD ip -o address show $NETWORK_INTERFACE | awk '{print $4}' | grep $IP | cut -d/ -f2)"
-    echo "#!/bin/sh
-
-FLOATING_IP=\"$FLOATING_IP\"
-SUBNET_MASK=\"$SUBNET_MASK\"
-INTERFACE=\"$NETWORK_INTERFACE\"
-
-while true; do
-    sleep 20
-    lncli --lnddir /home/bitcoin/.lnd state | grep -q -E 'NON_EXISTING|LOCKED|UNLOCKED|RPC_ACTIVE|SERVER_ACTIVE'
-    IS_LEADER=\$?
-
-    ip addr show \$INTERFACE | grep -q \$FLOATING_IP
-    IP_ASSIGNED=\$?
-
-    if [ \$IS_LEADER -eq 0 ] && [ \$IP_ASSIGNED -ne 0 ]; then
-        echo \"Assigning the floating IP address to this node since it is the leader\"
-        ip addr add \$FLOATING_IP/\$SUBNET_MASK dev \$INTERFACE
-        arping -c 1 -I \$INTERFACE \$FLOATING_IP
-    elif [ \$IS_LEADER -ne 0 ] && [ \$IP_ASSIGNED -eq 0 ]; then
-        echo \"Removing the floating IP address since this node is no longer the leader\"
-        ip addr del \$FLOATING_IP/\$SUBNET_MASK dev \$INTERFACE
-    fi
-done" | $SSH_CMD "cat > /usr/local/bin/lnd-floating-ip.sh"
+    sed -e "s/{FLOATING_IP}/$FLOATING_IP/g" \
+        -e "s/{SUBNET_MASK}/$SUBNET_MASK/g" \
+        -e "s/{NETWORK_INTERFACE}/$NETWORK_INTERFACE/g" \
+        scripts/lnd-floating-ip.sh | $SSH_CMD "cat > /usr/local/bin/lnd-floating-ip.sh"
     $SSH_CMD chmod +x /usr/local/bin/lnd-floating-ip.sh
     scp services/lnd-floating-ip.service "root@$IP:/usr/lib/systemd/system/"
     $SSH_CMD systemctl daemon-reload
