@@ -68,7 +68,7 @@ printf "\033[1;32mDone deploying bitcoind\033[0m\n"
 printf "\033[1;36mStarting bitcoind.service\033[0m\n"
 $SSH_CMD systemctl start bitcoind.service
 if [ $NETWORK = regtest ]; then
-    $SSH_CMD bitcoin-cli createwallet main false false "" false false true
+    $SSH_CMD bitcoin-cli -named createwallet wallet_name=main load_on_startup=true
 fi
 
 printf "\033[1;36mGenerating certificates...\033[0m\n"

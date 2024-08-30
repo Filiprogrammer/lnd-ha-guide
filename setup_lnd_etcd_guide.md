@@ -121,10 +121,10 @@ rpcuser=user
 rpcpassword=password
 ```
 
-Create a wallet (the name does not matter)
+Create a wallet (the name does not matter) that will be loaded on startup.
 
 ```console
-root@bitcoind:~$ bitcoin-cli createwallet "main"
+root@bitcoind:~$ bitcoin-cli -named createwallet wallet_name=main load_on_startup=true
 ```
 
 Generate 101 blocks with the reward going to the created wallet.
