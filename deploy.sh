@@ -121,7 +121,8 @@ for i in `seq 1 3`; do
     $SSH_CMD mkdir /etc/etcd
     scp certs/ca.crt certs/etcd$i.crt certs/etcd$i.key certs/client.crt certs/client.key "root@$IP:/etc/etcd/"
     $SSH_CMD chown etcd:etcd "/etc/etcd/*"
-    $SSH_CMD chmod 440 "/etc/etcd/*"
+    $SSH_CMD chmod 400 /etc/etcd/etcd$i.key /etc/etcd/etcd$i.crt
+    $SSH_CMD chmod 440 /etc/etcd/ca.crt /etc/etcd/client.crt /etc/etcd/client.key
     echo "ETCD_NAME=etcd$i
 ETCD_INITIAL_CLUSTER="etcd1=https://$LNDETCD1_IP:2380,etcd2=https://$LNDETCD2_IP:2380,etcd3=https://$LNDETCD3_IP:2380"
 ETCD_ADVERTISE_CLIENT_URLS=https://$IP:2379

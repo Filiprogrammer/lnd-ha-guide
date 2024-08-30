@@ -243,7 +243,8 @@ Restrict the access rights of the certificates and keys to only the etcd user an
 
 ```console
 root@lndetcdx:~$ chown etcd:etcd /etc/etcd/*
-root@lndetcdx:~$ chmod 440 /etc/etcd/*
+root@lndetcdx:~$ chmod 400 /etc/etcd/etcd1.key /etc/etcd/etcd1.crt
+root@lndetcdx:~$ chmod 440 /etc/etcd/ca.crt /etc/etcd/client.crt /etc/etcd/client.key
 ```
 
 Add the bitcoin user to the etcd group, to allow lnd to access the etcd client certificate and key.
