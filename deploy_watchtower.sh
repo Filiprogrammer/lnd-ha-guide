@@ -54,6 +54,11 @@ rpcbind=127.0.0.1:8332
 zmqpubrawtx=tcp://127.0.0.1:29001
 zmqpubrawblock=tcp://127.0.0.1:29002
 listen=1" | $SSH_CMD "cat > /etc/bitcoin/bitcoin.conf"
+
+if [ $NETWORK = regtest ]; then
+    echo "addnode=$BITCOIND_IP" | $SSH_CMD "cat >> /etc/bitcoin/bitcoin.conf"
+fi
+
 $SSH_CMD chmod 0710 /etc/bitcoin
 $SSH_CMD chmod 0640 /etc/bitcoin/bitcoin.conf
 $SSH_CMD chown -R bitcoin:bitcoin /etc/bitcoin
@@ -121,7 +126,6 @@ $SSH_CMD sed -i "'/\[Application Options\]/a wallet-unlock-password-file=/home/b
 printf "\033[1;32mCreated lnd wallet\033[0m\n"
 
 if [ $NETWORK = regtest ]; then
-    $SSH_CMD bitcoin-cli addnode $BITCOIND_IP add
     ssh root@$BITCOIND_IP bitcoin-cli -generate 1
 fi
 
