@@ -166,7 +166,7 @@ Generate the certificates for the etcd nodes.
 Perform the following steps for each etcd node:
 
 ```console
-user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd1.key -out etcd1.csr -noenc -subj "/CN=etcd1" -addext "subjectAltName=IP:${IP_OF_LND_ETCD_1},IP:127.0.0.1"
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd1.key -out etcd1.csr -noenc -subj "/CN=etcd1" -addext "subjectAltName=IP:${IP_OF_LNDETCD1},IP:127.0.0.1"
 
 user@local:~$ openssl req -x509 -in etcd1.csr -CA ca.crt -CAkey ca.key -out etcd1.crt -days 3650 -copy_extensions copy
 ```
@@ -261,7 +261,7 @@ Put the following contents into the /etc/default/etcd file:
 
 ```
 ETCD_NAME=etcd1
-ETCD_INITIAL_CLUSTER="etcd1=https://${IP_OF_LND_ETCD_1}:2380,etcd2=https://${IP_OF_LND_ETCD_2}:2380,etcd3=https://${IP_OF_LND_ETCD_3}:2380"
+ETCD_INITIAL_CLUSTER="etcd1=https://${IP_OF_LNDETCD1}:2380,etcd2=https://${IP_OF_LNDETCD2}:2380,etcd3=https://${IP_OF_LNDETCD3}:2380"
 ETCD_ADVERTISE_CLIENT_URLS=https://${OWN_IP}:2379
 ETCD_LISTEN_CLIENT_URLS=https://0.0.0.0:2379
 ETCD_LISTEN_PEER_URLS=https://0.0.0.0:2380
