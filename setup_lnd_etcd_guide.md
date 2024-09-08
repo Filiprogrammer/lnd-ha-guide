@@ -1,6 +1,6 @@
 # Setting up a highly available LND cluster (manually)
 
-# Step 1: Setup a bitcoind regtest node
+# Step 1: Setup a bitcoind node
 
 Setup a Debian instance called "bitcoind" with the following ports allowed in the firewall:
 - 8332 (Bitcoin RPC)
@@ -20,9 +20,9 @@ root@bitcoind:~$ useradd --system --no-create-home --home /nonexistent --shell /
 Put the following contents into the /etc/bitcoin/bitcoin.conf file:
 
 ```ini
-regtest=1
+mainnet=1
 
-[regtest]
+[mainnet]
 server=1
 txindex=1
 disablewallet=0
@@ -35,6 +35,8 @@ zmqpubrawtx=tcp://0.0.0.0:29001
 zmqpubrawblock=tcp://0.0.0.0:29002
 listen=1
 ```
+
+Change each occurrence of `mainnet` to the network which this should run on.
 
 Adjust the ownership and permissions of the config file and directory.
 
@@ -120,6 +122,8 @@ To be able to use bitcoin-cli without having to manually specify `-rpcuser` and 
 rpcuser=user
 rpcpassword=password
 ```
+
+### The following three commands only apply to a regtest setup
 
 Create a wallet (the name does not matter) that will be loaded on startup.
 
