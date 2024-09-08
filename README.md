@@ -1,14 +1,56 @@
 # Highly available LND cluster setup
 
-This repository provides an example of how to set up a highly available LND lightning node by running it as a 3-node cluster. The state is stored in a replicated etcd database. The active leader node is always accessible via the same floating IP address and a Tor hidden service.
+This repository provides some examples of setting up an LND Lightning node in a 3-node cluster to achieve high availability. This setup allows the Lightning node to remain operational even if one of the three nodes fails, ensuring minimal downtime. Furthermore, the replicated database safeguards against data loss.
 
-## Topology
+## Leader election
 
-![Topology](topology.png)
+In a highly available cluster of multiple nodes, there must always be a single active leader running the core LND logic. The other nodes must be on standby, waiting to take over in the event that the leader fails. Ideally, this should work without human intervention. Thankfully, this can be automated using the leader election provided by [etcd](https://etcd.io/).
+
+### What is etcd?
+
+> etcd is a strongly consistent, distributed key-value store that provides a reliable way to store data that needs to be accessed by a distributed system or cluster of machines. It gracefully handles leader elections during network partitions and can tolerate machine failure, even in the leader node.
+
+Fortunately, LND supports leader election via etcd, enabling the operation of a cluster where there is only ever one leader able to read and modify LND's replicated state database.
+
+For more information on etcd leader election in LND, see the LND documentation: https://docs.lightning.engineering/lightning-network-tools/lnd/leader_election
+
+## Solution 1: LND cluster with etcd backend
+
+Since etcd is also a distributed key-value store, it can serve as a database for LND to store its state in. Anything written to the database on one node is automatically replicated to all the other nodes in the cluster. The write operation is not considered successful until it has been replicated to the majority of the nodes in the cluster. The majority agreeing on a database state forms a quorum. The quorum is necessary to determine which state of the database is the correct, most recent one. For this reason, in a 3-node cluster, at least 2 of the nodes must be available to achieve a quorum.
+
+### Floating IP address
+
+To achieve location transparency and ensure that the leader instance instance of LND is consistently accessible via the same IP address, irrespective of the node it is currently operating on, a floating IP address can be utilized. A floating IP address is a form of virtual IP address that can be dynamically reassigned between different instances. Multiple servers can share the same floating IP address, but it can only be active on one server at a time.
+
+### Lightning Watchtower
+
+Optionally, a Lightning Watchtower can be set up in a remote datacenter to protect funds in the unlikely event that the entire cluster fails or loses internet connectivity. The Watchtower would monitor the Bitcoin blockchain for channel breaches (revoked commitment transactions) and, if detected, broadcast a penalty transaction to prevent the loss of funds.
+
+![Topology of LND cluster with etcd backend](topology_etcd.png)
+
+## Solution 2: LND cluster with PostgreSQL backend
+
+Another way is to use [PostgreSQL](https://www.postgresql.org/) as the replicated database backend for LND. PostgreSQL is a battle-tested relational database system developed since the 1980s. It is widely trusted in production environments for its reliability, robustness and performance.
+
+This setup still uses etcd for leader election, since that is the only leader elector supported by LND. etcd also serves as a distributed configuration store for [Patroni](https://github.com/patroni/patroni), a tool that manages replication and failover of the PostgreSQL cluster.
+
+An important consideration with this setup is that the LND leader must always run on the same instance as the PostgreSQL primary, since PostgreSQL replicas are read-only. However, this is automatically handled by LND, which will fail to start if it connects to a read-only database.
+
+![Topology of LND cluster with PostgreSQL backend](topology_postgres.png)
+
+## etcd vs. PostgreSQL as a database backend for LND
+
+As evidenced in the preceding section, configuring PostgreSQL as the replicated database backend is more complex than using etcd. But how does this choice impact performance?
+
+As of LND v0.18.3-beta, SQL-based database backends are not used to their fullest potential yet. Since LND was originally built on a key-value pair database, the SQL backend currently stores most data, except for invoices, as serialized key-value pairs. However, as development progresses, it is expected that more parts of the database will transition to native SQL schemas, thereby improving performance. To use the existing native SQL schemas, enable them by passing the `db.use-native-sql` flag to LND.
+
+### Benchmarks
+
+_Work in progress (Will publish soon)_
 
 ## Building
 
-Build Bitcoin Core
+For any of the setups Bitcoin Core binaries have to be obtained. Run the following commands to build Bitcoin Core, or refer to [bitcoin/doc/build-unix.md](https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md) for more detailed build instructions.
 
 ```console
 git clone --branch v25.0 https://github.com/bitcoin/bitcoin.git
@@ -18,19 +60,19 @@ cd bitcoin
 make
 ```
 
-Build at least lnd v0.18.3-beta, or make sure that the following patch is applied: https://github.com/lightningnetwork/lnd/pull/8938 Also make sure that lnd is compiled with the "kvdb_etcd" and "watchtowerrpc" build tags.
+Build at least lnd v0.18.3-beta, or make sure that the following patch is applied: https://github.com/lightningnetwork/lnd/pull/8938 Also make sure that lnd is compiled with the "kvdb_etcd" and "watchtowerrpc" build tags. If a PostgreSQL setup is planned, add the "kvdb_postgres" build tag as well.
 
 ```console
 git clone --branch v0.18.3-beta https://github.com/lightningnetwork/lnd.git
 cd lnd
-make install tags="kvdb_etcd watchtowerrpc"
+make install tags="kvdb_etcd kvdb_postgres watchtowerrpc"
 ```
 
 Move the resulting binaries (`bitcoind`, `bitcoin-cli`, `lnd`, `lncli`) to the `bin` directory.
 
 ## Deploying
 
-Either go the manual route and set everything up according to this [manual](setup_lnd_cluster_guide.md), or automate the process by using the `deploy_with_etcddb.sh` script.
+Either go the manual route and set everything up according to this [manual](setup_lnd_cluster_guide.md), or automate most of the process with a deploy script by following the steps below.
 
 To get started, set up a Debian instance called "bitcoind" to act as a Bitcoin full node. Configure the firewall to allow incoming connections on the following ports:
 
@@ -41,16 +83,21 @@ To get started, set up a Debian instance called "bitcoind" to act as a Bitcoin f
 - 29001 (ZeroMQ transaction publisher)
 - 29002 (ZeroMQ block publisher)
 
-Furthermore set up 3 Debian instances with ECC memory called "lndetcd1", "lndetcd2" and "lndetcd3". These will act as a 3-node LND+etcd cluster. Configure the firewall to allow incoming connections on the following ports:
+Next there are two options. Either setup the LND cluster with an etcd database backend or setup the LND cluster with a PostgreSQL database backend.
+
+<details>
+<summary>Option 1: etcd database backend</summary>
+
+Set up 3 Debian instances with ECC memory called "lndetcd1", "lndetcd2" and "lndetcd3". These will act as a 3-node LND+etcd cluster. Configure the firewall to allow incoming connections on the following ports:
 
 - 22 (SSH)
 - 2379 (etcd client communication)
 - 2380 (etcd peer communication)
 - 9735 (Lightning)
 
-All instances need to have public key authentication configured for root ssh access in order for the deploy script to work.
+All instances need to have public key authentication configured for root SSH access in order for the deploy script to work.
 
-Next start an ssh-agent on a local system and add the ssh private keys for the 4 Debian instances. This allows for ssh to connect to the instances without having to manually specify the respective private key file each time.
+Next start an ssh-agent on a local system and add the SSH private keys for the 4 Debian instances. This allows for ssh to connect to the instances without having to manually specify the respective private key file each time.
 
 ```console
 eval "$(ssh-agent -s)"
@@ -63,7 +110,7 @@ Then run the deploy script with the following arguments:
 - lndetcd1_ip - IP address of the lndetcd1 instance
 - lndetcd2_ip - IP address of the lndetcd2 instance
 - lndetcd3_ip - IP address of the lndetcd3 instance
-- floating_ip - floating IP address that will always point to the current leader lnd node
+- floating_ip - floating IP address that will always point to the current leader LND node
 - <mainnet|testnet|signet|regtest> - Chain/Network that should be used
 - bitcoindrpcuser - RPC username to use for bitcoind
 - bitcoindrpcpass - RPC password to use for bitcoind
@@ -72,16 +119,59 @@ Then run the deploy script with the following arguments:
 ```console
 ./deploy_with_etcddb.sh <bitcoind_ip> <lndetcd1_ip> <lndetcd2_ip> <lndetcd3_ip> <floating_ip> <mainnet|testnet|signet|regtest> <bitcoindrpcuser> <bitcoindrpcpass> <lndwalletpass>
 ```
+</details>
+
+---
+
+<details>
+<summary>Option 2: PostgreSQL database backend</summary>
+
+Set up 3 Debian instances with ECC memory called "lndetcdpg1", "lndetcdpg2" and "lndetcdpg3". These will act as a 3-node LND+etcd+PostgreSQL cluster. Configure the firewall to allow incoming connections on the following ports:
+
+- 22 (SSH)
+- 2379 (etcd client communication)
+- 2380 (etcd peer communication)
+- 5432 (PostgreSQL)
+- 8008 (Patroni REST API)
+- 9735 (Lightning)
+
+All instances need to have public key authentication configured for root SSH access in order for the deploy script to work.
+
+Next start an ssh-agent on a local system and add the SSH private keys for the 4 Debian instances. This allows for ssh to connect to the instances without having to manually specify the respective private key file each time.
+
+```console
+eval "$(ssh-agent -s)"
+ssh-add <bitcoind_ssh_key> <lndetcdpg1_ssh_key> <lndetcdpg2_ssh_key> <lndetcdpg3_ssh_key>
+```
+
+Then run the deploy script with the following arguments:
+
+- bitcoind_ip - IP address of the bitcoind instance
+- lndetcdpg1_ip - IP address of the lndetcdpg1 instance
+- lndetcdpg2_ip - IP address of the lndetcdpg2 instance
+- lndetcdpg3_ip - IP address of the lndetcdpg3 instance
+- floating_ip - floating IP address that will always point to the current leader LND node
+- <mainnet|testnet|signet|regtest> - Chain/Network that should be used
+- bitcoindrpcuser - RPC username to use for bitcoind
+- bitcoindrpcpass - RPC password to use for bitcoind
+- lndwalletpass - Password used to encrypt the LND wallet
+
+```console
+./deploy_with_postgresdb.sh <bitcoind_ip> <lndetcdpg1_ip> <lndetcdpg2_ip> <lndetcdpg3_ip> <floating_ip> <mainnet|testnet|signet|regtest> <bitcoindrpcuser> <bitcoindrpcpass> <lndwalletpass>
+```
+</details>
+
+## Optional: Deploying the watchtower
 
 The optional next step is to setup a watchtower in a different datacenter.
 
-Start by setting up a Debian instance called "lndwt" with public key authentication configured for root ssh access and incoming connections on the following ports allowed in the firewall:
+Start by setting up a Debian instance called "lndwt" with public key authentication configured for root SSH access and incoming connections on the following ports allowed in the firewall:
 
 - 22 (SSH)
 - 8333/18333/38333/18444 (Bitcoin Mainnet/Testnet/Signet/Regtest)
 - 9911 (LND watchtower)
 
-Add the ssh key to the ssh-agent if necessary.
+Add the SSH key to the ssh-agent if necessary.
 
 ```console
 ssh-add <lndwt_ssh_key>
