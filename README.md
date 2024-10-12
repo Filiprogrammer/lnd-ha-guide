@@ -42,11 +42,65 @@ An important consideration with this setup is that the LND leader must always ru
 
 As evidenced in the preceding section, configuring PostgreSQL as the replicated database backend is more complex than using etcd. But how does this choice impact performance?
 
-As of LND v0.18.3-beta, SQL-based database backends are not used to their fullest potential yet. Since LND was originally built on a key-value pair database, the SQL backend currently stores most data, except for invoices, as serialized key-value pairs. However, as development progresses, it is expected that more parts of the database will transition to native SQL schemas, thereby improving performance. To use the existing native SQL schemas, enable them by passing the `db.use-native-sql` flag to LND.
+LND v0.18.3-beta does not yet realize the full potential of SQL-based database backends. Since LND was originally built on a key-value pair database, the SQL backend currently stores most data, except for invoices, as serialized key-value pairs. However, as development progresses, it is expected that more parts of the database will transition to native SQL schemas, thereby improving performance. To use the existing native SQL schemas, enable them by passing the `db.use-native-sql` flag to LND.
 
 ### Benchmarks
 
-_Work in progress (Will publish soon)_
+To compare the different setups, a series of benchmarks were conducted. The three instances forming the LND cluster were run as separate virtual machines on the same physical host. The storage backend were virtual SATA disks located in RAM and rate limited to 400 MB/s, 92k read IOPS and 83k write IOPS to simulate the performance of a typical consumer-grade SATA SSD. Each instance was given 1 CPU core with 2 threads (pinned and isolated) and 3 GiB of RAM.
+
+A Lightning channel was established between the LND cluster and a single LND node with a bbolt database. This single LND node was run directly on the host, utilizing the 3 remaining CPU cores (each with 2 threads), with its bbolt database stored on a ramfs. This setup was designed to ensure the node operated very quickly, minimizing any impact it could have on the benchmark results.
+
+In addition to the already described setups, LND was also tested on a Ceph pool. [Ceph](https://ceph.io/en/) is a distributed storage solution. In the benchmarks, the LND database was stored on a Ceph Block Device distributed across three BlueStore OSDs running on 3 different virtual machines. Each OSD was backed by three virtual SATA disks, designated for `block`, `block.db`, and `block.wal` respectively.
+
+In total, six different setups were evaluated:
+
+- LND v0.18.3-beta with a bbolt database backend running on a Ceph RBD
+- LND v0.18.3-beta with an SQLite database backend (without the `db.use-native-sql` flag) on a Ceph RBD
+- LND v0.18.3-beta with an SQLite database backend (with the `db.use-native-sql` flag) on a Ceph RBD
+- LND v0.18.3-beta cluster with an etcd database backend and etcd leader election
+- LND v0.18.3-beta cluster with a PostgreSQL+Patroni database backend (without the `db.use-native-sql` flag) and etcd leader election
+- LND v0.18.3-beta cluster with a PostgreSQL+Patroni database backend (with the `db.use-native-sql` flag) and etcd leader election
+
+### Benchmark: Receiving a 100-shard multi-part payment
+
+The first and most important benchmark focuses on receiving payments. In this test, an invoice is paid from the single LND node as a multi-part payment, split into 100 HTLCs along a predefined route. The benchmark measures the time from the initiation of the payment until the settlement of all HTLCs. Notably, the process of writing the preimages to the database on the single LND node is excluded from the measurements, since it is not relevant to the performance of the clustered node. The test was repeated several times to obtain an average result.
+
+![](benchmark_receive_duration.png)
+
+The benchmark results indicate that setups using a PostgreSQL database backend provide the fastest performance for receiving payments.
+
+![](benchmark_receive_storage.png)
+
+Regarding storage consumption, setups using Ceph consumed significantly more than the other setups. Receiving payments on Ceph-based setups caused the metadata of the Ceph OSDs to grow rapidly, quickly filling up the disks. This is likely due to unnecessary replication of uncompacted bbolt/SQLite database file contents.
+
+### Benchmark: Sending a 100-shard multi-part payment
+
+The second benchmark involves paying an invoice of the single LND node from the clustered node as a multi-part payment split into 100 HTLCs along a predefined route. The time measured spans from the initiation of the payment until the successful writing of all preimages into the database of the clustered node. This process was repeated several times to obtain an average result.
+
+![](benchmark_send_duration.png)
+
+The benchmark results indicate that sending payments is currently fastest with an etcd database backend. The slow performance of SQL-based databases like SQLite and PostgreSQL is expected to improve in the future as more parts of the database migrate from serialized key-value pairs to native SQL schemas.
+
+![](benchmark_send_storage.png)
+
+The storage consumption of the Ceph based setups is also very high when sending payments. What is really remarkable though, is the very low storage usage of the PostgreSQL based setups.
+
+### Benchmark conclusion
+
+The benchmarks clearly indicate that a database on top of a Ceph RBD is not suited for operating an LND node due to its high storage consumption.
+
+Currently, etcd serves a reasonable middle ground. While it doesn't excel in any specific area, it performs adequately across the board.
+
+PostgreSQL has the lowest storage footprint of all the tested options. Its performance for receiving payments is unmatched, but sending payments is quite slow. However, this is likely to improve in the future as more parts of the LND database migrate to native SQL schemas. With this outlook in mind, using a PostgreSQL database in an LND cluster appears to be a sensible choice.
+
+Additionally, PostgreSQL benefits from optimizations enabled by its architecture, where it is writable only on the primary node and read-only on replicas. In contrast, etcd can be written to from any node, facilitating faster failover times since the LND leader does not need to be on the same instance as the etcd leader.
+
+| etcd                    | PostgreSQL         | Ceph |
+|-------------------------|--------------------|------|
+| medium storage consumption | ✅ low storage consumption | ❌ high storage consumption |
+| ✅ easier setup | manageable setup | ❌ complicated setup |
+| key-value pair database | ✅ relational database with outlook for performance improvements | ❌ replication of everything (also irrelevant parts of the database file) |
+| ✅ fast failover | slower failover | (failover times not evaluated) |
 
 ## Building
 
