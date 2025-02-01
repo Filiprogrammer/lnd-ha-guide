@@ -102,6 +102,8 @@ Additionally, PostgreSQL benefits from optimizations enabled by its architecture
 | key-value pair database | ✅ relational database with outlook for performance improvements | ❌ replication of everything (also irrelevant parts of the database file) |
 | ✅ fast failover | slower failover | (failover times not evaluated) |
 
+To [reproduce the benchmarks](benchmark/benchmark.md), use the scripts in the `benchmark/` directory.
+
 ## Building
 
 For any of the setups Bitcoin Core binaries have to be obtained. Run the following commands to build Bitcoin Core, or refer to [bitcoin/doc/build-unix.md](https://github.com/bitcoin/bitcoin/blob/master/doc/build-unix.md) for more detailed build instructions.
