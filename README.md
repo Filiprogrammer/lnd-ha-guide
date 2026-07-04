@@ -20,7 +20,7 @@ Since etcd is also a distributed key-value store, it can serve as a database for
 
 ### Floating IP address
 
-To achieve location transparency and ensure that the leader instance instance of LND is consistently accessible via the same IP address, irrespective of the node it is currently operating on, a floating IP address can be utilized. A floating IP address is a form of virtual IP address that can be dynamically reassigned between different instances. Multiple servers can share the same floating IP address, but it can only be active on one server at a time.
+To achieve location transparency and ensure that the leader instance of LND is consistently accessible via the same IP address, irrespective of the node it is currently operating on, a floating IP address can be utilized. A floating IP address is a form of virtual IP address that can be dynamically reassigned between different instances. Multiple servers can share the same floating IP address, but it can only be active on one server at a time.
 
 ### Lightning Watchtower
 
