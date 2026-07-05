@@ -59,7 +59,7 @@ postgresql:
       password: {POSTGRES_REWIND_PASSWORD}
   listen: '*:5432'
   connect_address: {IP}:5432
-  data_dir: /var/lib/postgresql/15/main
-  bin_dir: /usr/lib/postgresql/15/bin
-  config_dir: /etc/postgresql/15/main
-  pgpass: /var/lib/postgresql/15-main.pgpass
+  data_dir: /var/lib/postgresql/17/main
+  bin_dir: /usr/lib/postgresql/17/bin
+  config_dir: /etc/postgresql/17/main
+  pgpass: /var/lib/postgresql/17-main.pgpass

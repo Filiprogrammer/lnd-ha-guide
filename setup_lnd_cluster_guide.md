@@ -230,27 +230,7 @@ root@lndetcdx:~$ systemctl stop etcd.service
 root@lndetcdx:~$ rm -r /var/lib/etcd/default
 ```
 
-To ensure that the lnd.service does not fail to start because of a dependency problem when the etcd.service times out during startup, configure `RestartMode=direct` on the etcd.service. This `RestartMode=direct` was only introduced in systemd 254, so systemd has to be upgraded to that version.
-
-Start with adding the bookworm-backports repository to apt, by adding the following line to /etc/apt/sources.list on each instance:
-
-```
-deb http://deb.debian.org/debian bookworm-backports main
-```
-
-Then update the package lists on each instance.
-
-```console
-root@lndetcdx:~$ apt update
-```
-
-And install systemd 254 from the bookworm-backports repository on each instance.
-
-```console
-root@lndetcdx:~$ apt install systemd/stable-backports
-```
-
-With systemd upgraded, add `RestartMode=direct` to the `[Service]` section of the `/usr/lib/systemd/system/etcd.service` file on each instance.
+To ensure that the lnd.service does not fail to start because of a dependency problem when the etcd.service times out during startup, configure `RestartMode=direct` on the etcd.service. Add `RestartMode=direct` to the `[Service]` section of the `/usr/lib/systemd/system/etcd.service` file on each instance.
 
 Finally update the running systemd configuration on each instance.
 
@@ -352,7 +332,7 @@ Stop the postgresql.service and the patroni.service which might have been starte
 root@lndetcdpgx:~$ systemctl stop postgresql.service
 root@lndetcdpgx:~$ systemctl stop 'postgresql@*.service'
 root@lndetcdpgx:~$ systemctl stop patroni.service
-root@lndetcdpgx:~$ rm -r /var/lib/postgresql/15/main
+root@lndetcdpgx:~$ rm -r /var/lib/postgresql/17/main
 ```
 
 Since PostgreSQL is not intended to be started by systemd, but will instead be started by Patroni, disable and mask the postgresql.service so that it cannot be started directly by systemd.
@@ -437,10 +417,10 @@ postgresql:
       password: POSTGRES_REWIND_PASSWORD
   listen: '*:5432'
   connect_address: ${OWN_IP}:5432
-  data_dir: /var/lib/postgresql/15/main
-  bin_dir: /usr/lib/postgresql/15/bin
-  config_dir: /etc/postgresql/15/main
-  pgpass: /var/lib/postgresql/15-main.pgpass
+  data_dir: /var/lib/postgresql/17/main
+  bin_dir: /usr/lib/postgresql/17/bin
+  config_dir: /etc/postgresql/17/main
+  pgpass: /var/lib/postgresql/17-main.pgpass
 ```
 
 Repeat that for "lndetcdpg2" and "lndetcdpg3" with name, $OWN_IP and the certificate files changed respectively.

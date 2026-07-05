@@ -110,9 +110,8 @@ for i in `seq 1 3`; do
     scp bin/lnd bin/lncli "root@$IP:/usr/bin/"
     $SSH_CMD chmod +x /usr/bin/lnd /usr/bin/lncli
     $SSH_CMD useradd --system --create-home --shell /bin/bash bitcoin
-    $SSH_CMD "echo \"deb http://deb.debian.org/debian bookworm-backports main\" >> /etc/apt/sources.list"
     $SSH_CMD apt update
-    $SSH_CMD apt install --no-install-recommends -y systemd/stable-backports etcd-server etcd-client tor arping postgresql patroni
+    $SSH_CMD apt install --no-install-recommends -y etcd-server etcd-client tor arping postgresql patroni
     $SSH_CMD systemctl stop etcd.service
     $SSH_CMD systemctl stop tor.service
     $SSH_CMD systemctl stop postgresql.service
@@ -123,7 +122,7 @@ for i in `seq 1 3`; do
     $SSH_CMD systemctl mask postgresql.service
     $SSH_CMD systemctl mask postgresql@.service
     $SSH_CMD rm -r /var/lib/etcd/default
-    $SSH_CMD rm -r /var/lib/postgresql/15/main
+    $SSH_CMD rm -r /var/lib/postgresql/17/main
     $SSH_CMD sed -i "'/\[Service\]/a RestartMode=direct'" /usr/lib/systemd/system/etcd.service
     $SSH_CMD mkdir /etc/etcd
     scp certs/ca.crt certs/etcd$i.crt certs/etcd$i.key "root@$IP:/etc/etcd/"
