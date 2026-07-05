@@ -323,7 +323,7 @@ Skip this step if a PostgreSQL database is not planned.
 Start by installing PostgreSQL and Patroni on all three instances.
 
 ```console
-root@lndetcdpgx:~$ apt install postgresql patroni
+root@lndetcdpgx:~$ apt install postgresql patroni python3-etcd
 ```
 
 Stop the postgresql.service and the patroni.service which might have been started automatically during installation, and delete the PostgreSQL data directory on each instance to start fresh.

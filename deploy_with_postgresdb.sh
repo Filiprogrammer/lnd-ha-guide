@@ -111,7 +111,7 @@ for i in `seq 1 3`; do
     $SSH_CMD chmod +x /usr/bin/lnd /usr/bin/lncli
     $SSH_CMD useradd --system --create-home --shell /bin/bash bitcoin
     $SSH_CMD apt update
-    $SSH_CMD apt install --no-install-recommends -y etcd-server etcd-client tor arping postgresql patroni
+    $SSH_CMD apt install --no-install-recommends -y etcd-server etcd-client tor arping postgresql patroni python3-etcd
     $SSH_CMD systemctl stop etcd.service
     $SSH_CMD systemctl stop tor.service
     $SSH_CMD systemctl stop postgresql.service
