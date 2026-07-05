@@ -64,17 +64,17 @@ fi
 printf "\033[1;36mGenerating certificates...\033[0m\n"
 mkdir -p certs
 cd certs
-openssl req -x509 -noenc -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout ca.key -out ca.crt -days 3650 -subj "/CN=lndetcdpg-ca"
+openssl req -x509 -noenc -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout ca.key -out ca.crt -days 3650 -subj "/CN=lndetcdpg-ca" -addext "basicConstraints=critical,CA:true" -addext "keyUsage=critical,keyCertSign,cRLSign"
 for i in `seq 1 3`; do
     eval IP=\$LNDETCDPG${i}_IP
-    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd$i.key -out etcd$i.csr -noenc -subj "/CN=etcd$i" -addext "subjectAltName=IP:$IP,IP:127.0.0.1"
+    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd$i.key -out etcd$i.csr -noenc -subj "/CN=etcd$i" -addext "subjectAltName=IP:$IP,IP:127.0.0.1" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=serverAuth,clientAuth"
     openssl req -x509 -in etcd$i.csr -CA ca.crt -CAkey ca.key -out etcd$i.crt -days 3650 -copy_extensions copy
-    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroni$i.key -out patroni$i.csr -noenc -subj "/CN=patroni$i" -addext "subjectAltName=IP:$IP,IP:127.0.0.1"
+    openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroni$i.key -out patroni$i.csr -noenc -subj "/CN=patroni$i" -addext "subjectAltName=IP:$IP,IP:127.0.0.1" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=serverAuth"
     openssl req -x509 -in patroni$i.csr -CA ca.crt -CAkey ca.key -out patroni$i.crt -days 3650 -copy_extensions copy
 done
-openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcdclient.key -out etcdclient.csr -noenc -subj "/CN=etcdclient"
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcdclient.key -out etcdclient.csr -noenc -subj "/CN=etcdclient" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=clientAuth"
 openssl req -x509 -in etcdclient.csr -CA ca.crt -CAkey ca.key -out etcdclient.crt -days 3650 -copy_extensions copy
-openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroniclient.key -out patroniclient.csr -noenc -subj "/CN=patroniclient"
+openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroniclient.key -out patroniclient.csr -noenc -subj "/CN=patroniclient" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=clientAuth"
 openssl req -x509 -in patroniclient.csr -CA ca.crt -CAkey ca.key -out patroniclient.crt -days 3650 -copy_extensions copy
 cd ..
 printf "\033[1;32mDone generating certificates\033[0m\n"

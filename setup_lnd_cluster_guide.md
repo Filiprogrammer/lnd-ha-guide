@@ -158,7 +158,7 @@ This tool is going to be used to generate TLS certificates.
 First initialize a certificate authority.
 
 ```console
-user@local:~$ openssl req -x509 -noenc -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout ca.key -out ca.crt -days 3650 -subj "/CN=lndetcd-ca"
+user@local:~$ openssl req -x509 -noenc -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout ca.key -out ca.crt -days 3650 -subj "/CN=lndetcd-ca" -addext "basicConstraints=critical,CA:true" -addext "keyUsage=critical,keyCertSign,cRLSign"
 ```
 
 Generate the certificates for the etcd nodes.
@@ -166,7 +166,7 @@ Generate the certificates for the etcd nodes.
 Perform the following steps for each etcd node:
 
 ```console
-user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd1.key -out etcd1.csr -noenc -subj "/CN=etcd1" -addext "subjectAltName=IP:${IP_OF_LNDETCD1},IP:127.0.0.1"
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout etcd1.key -out etcd1.csr -noenc -subj "/CN=etcd1" -addext "subjectAltName=IP:${IP_OF_LNDETCD1},IP:127.0.0.1" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=serverAuth,clientAuth"
 
 user@local:~$ openssl req -x509 -in etcd1.csr -CA ca.crt -CAkey ca.key -out etcd1.crt -days 3650 -copy_extensions copy
 ```
@@ -174,7 +174,7 @@ user@local:~$ openssl req -x509 -in etcd1.csr -CA ca.crt -CAkey ca.key -out etcd
 Lastly generate a client certificate.
 
 ```console
-user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout client.key -out client.csr -noenc -subj "/CN=client"
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout client.key -out client.csr -noenc -subj "/CN=client" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=clientAuth"
 
 user@local:~$ openssl req -x509 -in client.csr -CA ca.crt -CAkey ca.key -out client.crt -days 3650 -copy_extensions copy
 ```
@@ -184,7 +184,7 @@ If a PostgreSQL database is planned, also generate TLS certificates for Patroni.
 Perform the following steps for each Patroni instance:
 
 ```console
-user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroni1.key -out patroni1.csr -noenc -subj "/CN=patroni1" -addext "subjectAltName=IP:${IP_OF_LNDETCDPG1},IP:127.0.0.1"
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroni1.key -out patroni1.csr -noenc -subj "/CN=patroni1" -addext "subjectAltName=IP:${IP_OF_LNDETCDPG1},IP:127.0.0.1" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=serverAuth"
 
 user@local:~$ openssl req -x509 -in patroni1.csr -CA ca.crt -CAkey ca.key -out patroni1.crt -days 3650 -copy_extensions copy
 ```
@@ -192,7 +192,7 @@ user@local:~$ openssl req -x509 -in patroni1.csr -CA ca.crt -CAkey ca.key -out p
 Also generate a client certificate for Patroni.
 
 ```console
-user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroniclient.key -out patroniclient.csr -noenc -subj "/CN=patroniclient"
+user@local:~$ openssl req -new -newkey ec -pkeyopt ec_paramgen_curve:P-256 -keyout patroniclient.key -out patroniclient.csr -noenc -subj "/CN=patroniclient" -addext "keyUsage=critical,digitalSignature" -addext "extendedKeyUsage=clientAuth"
 
 user@local:~$ openssl req -x509 -in patroniclient.csr -CA ca.crt -CAkey ca.key -out patroniclient.crt -days 3650 -copy_extensions copy
 ```
